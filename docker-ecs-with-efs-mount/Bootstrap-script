@@ -1,0 +1,62 @@
+################  Bootstrap an instance to use Amazon EFS with user data ##############
+
+Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+MIME-Version: 1.0
+
+--==BOUNDARY==
+Content-Type: text/cloud-boothook; charset="us-ascii"
+
+# Install nfs-utils
+cloud-init-per once yum_update yum update -y
+cloud-init-per once install_nfs_utils yum install -y nfs-utils
+
+
+# Create /efs folder
+cloud-init-per once mkdir_efs mkdir /efs
+chmod 755 /efs
+
+# Mount /efs
+cloud-init-per once mount_efs echo -e 'fs-fXXXXXX.efs.us-east-1.amazonaws.com:/ /efs nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0' >> /etc/fstab
+mount -a
+
+--==BOUNDARY==--
+Content-Type: text/x-shellscript; charset="us-ascii"
+
+#!/bin/bash
+# Set any ECS agent configuration options
+echo "ECS_CLUSTER=new-updated" >> /etc/ecs/ecs.config
+
+--==BOUNDARY==--
+
+#########################
+######## /ETC/FSTAB Modification===================
+
+#cloud-config
+repo_update: true
+repo_upgrade: all
+
+packages:
+- amazon-efs-utils
+
+runcmd:
+- file_system_id_01=fs-12345678
+- efs_directory=/mnt/efs
+
+- mkdir -p ${efs_directory}
+- echo "${file_system_id_01}:/ ${efs_directory} efs tls,_netdev" >> /etc/fstab
+- mount -a -t efs defaults
+
+
+############### Configure Container Instances ##############
+
+sudo mkdir -p /mnt/efs
+sudo yum install -y nfs-utils
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 fs-6XXXXXXXX.efs.us-east-1.amazonaws.com:/ /efs
+
+
+mount | grep efs
+sudo cp /etc/fstab /etc/fstab.bak
+
+echo 'fs-6XXXXXXX.efs.us-east-1.amazonaws.com:/ /efs nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0' | sudo tee -a /etc/fstab
+
+sudo mount -a
